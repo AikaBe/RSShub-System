@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: rsshub-db
+    restart: always
+    environment:
+      POSTGRES_USER: rssuser
+      POSTGRES_PASSWORD: rsspass
+      POSTGRES_DB: rsshub
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  rsshub:
+    build: .
+    container_name: rsshub-app
+    restart: always
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: rssuser
+      DB_PASSWORD: rsspass
+      DB_NAME: rsshub
+    ports:
+      - "8080:8080"
+
+volumes:
+  db_data:
