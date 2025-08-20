@@ -13,7 +13,8 @@ services:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
-
+      - ./migration/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+  
   rsshub:
     build: .
     container_name: rsshub-app
@@ -28,6 +29,5 @@ services:
       DB_NAME: rsshub
     ports:
       - "8080:8080"
-
 volumes:
   db_data:

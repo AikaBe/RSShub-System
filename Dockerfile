@@ -9,13 +9,12 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o rsshub main.go
 
-FROM alpine:3.18
+FROM alpine:latest
 
 WORKDIR /app
 
-RUN apk add --no-cache ca-certificates
-
 COPY --from=builder /app/rsshub .
+RUN chmod +x /app/rsshub
 
 EXPOSE 8080
 

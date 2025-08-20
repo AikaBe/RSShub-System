@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	connStr := "host=db port=5432 user=rsshub-db password=rsspass dbname=rsshub sslmode=disable"
+	connStr := "host=localhost port=5432 user=rsshub-db password=rsspass dbname=rsshub sslmode=disable"
 	pgAdapter, err := postgre.NewApiAdapter(connStr)
 	if err != nil {
 		slog.Error("Postgres connection error", "err", err)
