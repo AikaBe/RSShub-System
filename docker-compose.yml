@@ -13,7 +13,7 @@ services:
       - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migration/create_feeds_table.down.sql:/docker-entrypoint-initdb.d/create_feeds_table.down.sql:ro
+      - ./migration/create_feeds_table.up.sql:/docker-entrypoint-initdb.d/create_feeds_table.sql:ro
 
   app:
     build: .
@@ -23,8 +23,6 @@ services:
     env_file:
       - .env
     command: ["./rsshub"]
-    volumes:
-      - .:/app
 
 volumes:
   postgres_data:

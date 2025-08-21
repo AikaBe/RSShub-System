@@ -1,10 +1,11 @@
-package rsshub
+package main
 
 import (
 	"fmt"
 	"log/slog"
 	"os"
 	"rsshub/internal/adapter/postgre"
+	"rsshub/internal/cli"
 
 	_ "github.com/lib/pq"
 )
@@ -29,4 +30,5 @@ func main() {
 		os.Exit(1)
 	}
 	defer pgAdapter.Close()
+	cli.FlagHandler(pgAdapter)
 }
