@@ -13,4 +13,4 @@ COPY --from=builder /app/rsshub .
 
 RUN chmod +x /app/rsshub
 
-CMD ["./rsshub"]
+CMD ["bash"]
