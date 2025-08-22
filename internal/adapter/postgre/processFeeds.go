@@ -1,0 +1,68 @@
+package postgre
+
+import (
+	"rsshub/config"
+	"rsshub/internal/domain/model"
+)
+
+func (a *ApiAdapter) GetOldestFeeds() ([]model.Feed, error) {
+	rows, err := a.db.Query(`
+		SELECT name, url 
+		FROM feeds 
+		ORDER BY updated_at 
+		LIMIT $1
+	`, config.Workers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var feeds []model.Feed
+	for rows.Next() {
+		var name, url string
+		if err := rows.Scan(&name, &url); err != nil {
+			return nil, err
+		}
+		feeds = append(feeds, model.Feed{
+			Name: name,
+			Url:  url,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return feeds, nil
+}
+
+func (a *ApiAdapter) AddArticle(item model.Item, feedID int) error {
+	_, err := a.db.Exec(`
+		insert into articles (feed_id, title, link, published_at, description, created_at, updated_at)
+		values ($1, $2, $3, $4, $5, NOW(), NOW())`,
+		feedID,
+		item.Title,
+		item.Link,
+		item.PubDate,
+		item.Description,
+	)
+	return err
+}
+
+func (a *ApiAdapter) ReadArticle() ([]model.Article, error) {
+	rows, err := a.db.Query(`select id, feed_id, title, link, published_at, description, created_at, updated_at from articles`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var articles []model.Article
+	for rows.Next() {
+		var art model.Article
+		if err := rows.Scan(&art.ID, &art.FeedID, &art.Title, &art.Link, &art.PublishedAt, &art.Description, &art.CreatedAt, &art.UpdatedAt); err != nil {
+			return nil, err
+		}
+		articles = append(articles, art)
+	}
+	return articles, nil
+}
