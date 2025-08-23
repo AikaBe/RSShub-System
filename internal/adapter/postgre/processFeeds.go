@@ -3,11 +3,12 @@ package postgre
 import (
 	"rsshub/config"
 	"rsshub/internal/domain/model"
+	"time"
 )
 
 func (a *ApiAdapter) GetOldestFeeds() ([]model.Feed, error) {
 	rows, err := a.db.Query(`
-		SELECT name, url 
+		SELECT id, name, url 
 		FROM feeds 
 		ORDER BY updated_at 
 		LIMIT $1
@@ -19,11 +20,13 @@ func (a *ApiAdapter) GetOldestFeeds() ([]model.Feed, error) {
 
 	var feeds []model.Feed
 	for rows.Next() {
+		var id int
 		var name, url string
-		if err := rows.Scan(&name, &url); err != nil {
+		if err := rows.Scan(&id, &name, &url); err != nil {
 			return nil, err
 		}
 		feeds = append(feeds, model.Feed{
+			Id:   id,
 			Name: name,
 			Url:  url,
 		})
@@ -36,21 +39,24 @@ func (a *ApiAdapter) GetOldestFeeds() ([]model.Feed, error) {
 	return feeds, nil
 }
 
-func (a *ApiAdapter) AddArticle(item model.Item, feedID int) error {
+func (a *ApiAdapter) AddArticle(item model.RSSItem, feedID int) error {
+	var pubAt *time.Time
+	if t, err := time.Parse(time.RFC1123Z, item.PubDate); err == nil {
+		pubAt = &t
+	}
+
 	_, err := a.db.Exec(`
 		insert into articles (feed_id, title, link, published_at, description, created_at, updated_at)
-		values ($1, $2, $3, $4, $5, NOW(), NOW())`,
-		feedID,
-		item.Title,
-		item.Link,
-		item.PubDate,
-		item.Description,
-	)
+		values ($1, $2, $3, $4, $5, NOW(), NOW())
+	`, feedID, item.Title, item.Link, pubAt, item.Description)
+
 	return err
 }
 
 func (a *ApiAdapter) ReadArticle() ([]model.Article, error) {
-	rows, err := a.db.Query(`select id, feed_id, title, link, published_at, description, created_at, updated_at from articles`)
+	rows, err := a.db.Query(`
+		select id, feed_id, title, link, published_at, description, created_at, updated_at 
+		from articles`)
 	if err != nil {
 		return nil, err
 	}
@@ -59,10 +65,13 @@ func (a *ApiAdapter) ReadArticle() ([]model.Article, error) {
 	var articles []model.Article
 	for rows.Next() {
 		var art model.Article
-		if err := rows.Scan(&art.ID, &art.FeedID, &art.Title, &art.Link, &art.PublishedAt, &art.Description, &art.CreatedAt, &art.UpdatedAt); err != nil {
+		if err := rows.Scan(
+			&art.ID, &art.FeedID, &art.Title, &art.Link,
+			&art.PublishedAt, &art.Description, &art.CreatedAt, &art.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
 		articles = append(articles, art)
 	}
-	return articles, nil
+	return articles, rows.Err()
 }

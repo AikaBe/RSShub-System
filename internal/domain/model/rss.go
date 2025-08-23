@@ -1,5 +1,7 @@
 package model
 
+import "time"
+
 type RSSFeed struct {
 	Channel struct {
 		Title       string    `xml:"title"`
@@ -17,6 +19,18 @@ type RSSItem struct {
 }
 
 type Feed struct {
+	Id   int
 	Name string
 	Url  string
+}
+
+type Article struct {
+	ID          int
+	FeedID      int
+	Title       string
+	Link        string
+	Description string
+	PublishedAt *time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }

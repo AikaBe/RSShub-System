@@ -1,8 +1,8 @@
 -- для самих каналов
 create table feeds (
     id serial primary key,
-    name text not null,
-    url text not null,
+    name text not null unique,
+    url text not null unique,
     created_at timestamp not null ,
     updated_at timestamp not null
 );

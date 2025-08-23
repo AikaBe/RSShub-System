@@ -1,9 +1,8 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
-	"rsshub/config"
 	"rsshub/internal/adapter/postgre"
 	"rsshub/internal/cli"
 
@@ -11,14 +10,11 @@ import (
 )
 
 func main() {
-	connStr := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		config.DbHost, config.DbPort, config.DbUser, config.DbPass, config.DbName,
-	)
+	connStr := "host=localhost port=5432 user=rssuser password=rsspass dbname=rsshub sslmode=disable"
 
 	pgAdapter, err := postgre.NewApiAdapter(connStr)
 	if err != nil {
-		// slog.Error("Postgres connection error", "err", err)
+		slog.Error("Postgres connection error", "err", err)
 		os.Exit(1)
 	}
 	defer pgAdapter.Close()
