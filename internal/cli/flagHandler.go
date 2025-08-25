@@ -1,21 +1,23 @@
 package cli
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"rsshub/internal/adapter/postgre"
 	"rsshub/internal/app"
 	"strconv"
+	"syscall"
 )
 
 func FlagHandler(pg *postgre.ApiAdapter) {
 	if len(os.Args) < 2 {
-		slog.Error("expected subcommands like 'add' or 'fetch'! ")
+		slog.Error("expected subcommands ! ")
 		os.Exit(1)
 	}
-
 	switch os.Args[1] {
 	case "add":
 		addCmd := flag.NewFlagSet("add", flag.ExitOnError)
@@ -32,8 +34,11 @@ func FlagHandler(pg *postgre.ApiAdapter) {
 		}
 
 	case "fetch":
-		if err := Start(pg); err != nil {
-			slog.Error("fetch failed", "err", err)
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+
+		if err := app.Start(ctx, pg); err != nil {
+			slog.Error("Wrong background work! ", err)
 		}
 
 	case "set-interval":
@@ -49,7 +54,7 @@ func FlagHandler(pg *postgre.ApiAdapter) {
 		if err != nil {
 			slog.Error("Cannot change the workers", err)
 		}
-		err = app.SetWorkers(workers, pg)
+		err = app.SetWorkers(workers, pg, context.Background())
 		if err != nil {
 			slog.Error("Cannot change the workers", err)
 		}

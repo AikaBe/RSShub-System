@@ -29,9 +29,9 @@ func Start(ctx context.Context, pg *postgre.ApiAdapter) error {
 	ticker = time.NewTicker(interval)
 
 	for i := 1; i <= config.Workers; i++ {
-		ctx, cancel := context.WithCancel(context.Background())
+		wctx, cancel := context.WithCancel(ctx)
 		workerCancels[i] = cancel
-		go Workers(i, pg, ctx)
+		go Workers(i, pg, wctx)
 	}
 
 	slog.Info("background fetch started", "interval", config.Interval, "workers", config.Workers)
@@ -116,11 +116,12 @@ func SetInterval(newInterval string) error {
 	ticker = time.NewTicker(d)
 	old := config.Interval
 	config.Interval = newInterval
+	slog.Info("new interval ", config.Interval)
 	slog.Info("Interval of fetching feeds changed", "from", old, "to", newInterval)
 	return nil
 }
 
-func SetWorkers(newWorkers int, pg *postgre.ApiAdapter) error {
+func SetWorkers(newWorkers int, pg *postgre.ApiAdapter, parentCnxt context.Context) error {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -128,7 +129,7 @@ func SetWorkers(newWorkers int, pg *postgre.ApiAdapter) error {
 
 	if newWorkers > config.Workers {
 		for w := config.Workers + 1; w <= newWorkers; w++ {
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(parentCnxt)
 			workerCancels[w] = cancel
 			go Workers(w, pg, ctx)
 		}
@@ -144,6 +145,7 @@ func SetWorkers(newWorkers int, pg *postgre.ApiAdapter) error {
 	}
 
 	config.Workers = newWorkers
+	slog.Info("workers count ", config.Workers)
 	slog.Info("Number of workers changed", "from", old, "to", newWorkers)
 	return nil
 }

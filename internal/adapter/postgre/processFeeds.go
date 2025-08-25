@@ -1,16 +1,18 @@
 package postgre
 
 import (
+	"log/slog"
 	"rsshub/config"
 	"rsshub/internal/domain/model"
 	"time"
 )
 
 func (a *ApiAdapter) GetOldestFeeds() ([]model.Feed, error) {
+	slog.Info("workers count ", config.Workers)
 	rows, err := a.db.Query(`
 		SELECT id, name, url 
 		FROM feeds 
-		ORDER BY updated_at 
+		ORDER BY updated_at asc
 		LIMIT $1
 	`, config.Workers)
 	if err != nil {
@@ -19,8 +21,8 @@ func (a *ApiAdapter) GetOldestFeeds() ([]model.Feed, error) {
 	defer rows.Close()
 
 	var feeds []model.Feed
+	var id int
 	for rows.Next() {
-		var id int
 		var name, url string
 		if err := rows.Scan(&id, &name, &url); err != nil {
 			return nil, err
@@ -36,7 +38,16 @@ func (a *ApiAdapter) GetOldestFeeds() ([]model.Feed, error) {
 		return nil, err
 	}
 
+	a.changeUpdate(id)
 	return feeds, nil
+}
+
+func (a *ApiAdapter) changeUpdate(id int) {
+	_, err := a.db.Exec(`update feeds set updated_at = NOW() where id = $1`, id)
+	if err != nil {
+		slog.Warn("cannot update the field ipdated_at from feeds table")
+		return
+	}
 }
 
 func (a *ApiAdapter) AddArticle(item model.RSSItem, feedID int) error {
