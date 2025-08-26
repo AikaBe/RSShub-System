@@ -14,3 +14,15 @@ func (a *ApiAdapter) AddFeed(name, url string) error {
 	slog.Info("data Added to the DB!")
 	return nil
 }
+
+func (pg *ApiAdapter) FeedExists(name, url string) (bool, error) {
+	query := `SELECT EXISTS (
+		SELECT 1 FROM feeds WHERE name = $1 OR url = $2
+	)`
+	var exists bool
+	err := pg.db.QueryRow(query, name, url).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}

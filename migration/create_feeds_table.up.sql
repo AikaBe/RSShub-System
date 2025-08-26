@@ -18,3 +18,10 @@ create table articles (
     created_at timestamp,
     updated_at timestamp
 );
+
+create table settings (
+                          id serial primary key,
+                          interval text not null default '3m',
+                          workers int not null default 3
+);
+insert into settings (interval, workers) values ('3m', 3);

@@ -43,7 +43,7 @@ func FlagHandler(pg *postgre.ApiAdapter) {
 
 	case "set-interval":
 		interval := os.Args[2]
-		err := app.SetInterval(interval)
+		err := app.SetInterval(interval, pg)
 		if err != nil {
 			slog.Error("Cannot change the interval", err)
 		}
@@ -52,7 +52,7 @@ func FlagHandler(pg *postgre.ApiAdapter) {
 		strWorkers := os.Args[2]
 		workers, err := strconv.Atoi(strWorkers)
 		if err != nil {
-			slog.Error("Cannot change the workers", err)
+			slog.Error("Invalid workers count", err)
 		}
 		err = app.SetWorkers(workers, pg, context.Background())
 		if err != nil {

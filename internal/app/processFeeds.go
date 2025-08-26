@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"io"
 	"log"
 	"log/slog"
@@ -15,26 +16,37 @@ import (
 )
 
 var (
-	jobs          = make(chan config.Jobs, 100)
-	mu            sync.Mutex
-	ticker        *time.Ticker
-	workerCancels = make(map[int]context.CancelFunc)
+	jobs            = make(chan config.Jobs, 100)
+	mu              sync.Mutex
+	ticker          *time.Ticker
+	workerCancels   = make(map[int]context.CancelFunc)
+	currentInterval time.Duration
 )
 
 func Start(ctx context.Context, pg *postgre.ApiAdapter) error {
-	interval, err := time.ParseDuration(config.Interval)
+	locked, err := pg.TryLock()
 	if err != nil {
 		return err
 	}
+	if !locked {
+		return errors.New("Background process is already running")
+	}
+	defer pg.Unlock()
+
+	interval, err := time.ParseDuration(pg.GetInterval())
+	if err != nil {
+		return err
+	}
+	currentInterval = interval
 	ticker = time.NewTicker(interval)
 
-	for i := 1; i <= config.Workers; i++ {
+	workers := pg.GetWorkers()
+	for i := 1; i <= workers; i++ {
 		wctx, cancel := context.WithCancel(ctx)
 		workerCancels[i] = cancel
 		go Workers(i, pg, wctx)
 	}
-
-	slog.Info("background fetch started", "interval", config.Interval, "workers", config.Workers)
+	slog.Info("The background process for fetching feeds has started ", "interval", interval, "workers", workers)
 
 	for {
 		select {
@@ -45,6 +57,18 @@ func Start(ctx context.Context, pg *postgre.ApiAdapter) error {
 			}
 			return nil
 		case t := <-ticker.C:
+			newIntervalStr := pg.GetInterval()
+			newInterval, err := time.ParseDuration(newIntervalStr)
+			if err == nil && newInterval != currentInterval {
+				mu.Lock()
+				ticker.Stop()
+				ticker = time.NewTicker(newInterval)
+				old := currentInterval
+				currentInterval = newInterval
+				mu.Unlock()
+				slog.Info("Interval changed via DB", "from", old, "to", newInterval)
+			}
+
 			slog.Info("tick", "time", t)
 
 			feeds, err := pg.GetOldestFeeds()
@@ -101,23 +125,18 @@ func Workers(id int, pg *postgre.ApiAdapter, ctx context.Context) {
 	}
 }
 
-func SetInterval(newInterval string) error {
-	d, err := time.ParseDuration(newInterval)
+func SetInterval(newInterval string, pg *postgre.ApiAdapter) error {
+	if newInterval == "" {
+		newInterval = "3m"
+	}
+	_, err := time.ParseDuration(newInterval)
 	if err != nil {
 		return err
 	}
 
-	mu.Lock()
-	defer mu.Unlock()
-	if ticker != nil {
-		ticker.Stop()
-	}
-
-	ticker = time.NewTicker(d)
-	old := config.Interval
-	config.Interval = newInterval
-	slog.Info("new interval ", config.Interval)
-	slog.Info("Interval of fetching feeds changed", "from", old, "to", newInterval)
+	old := pg.GetInterval()
+	pg.SetInterval(newInterval)
+	slog.Info("Interval of fetching feeds saved to DB", "from", old, "to", newInterval)
 	return nil
 }
 
@@ -125,18 +144,23 @@ func SetWorkers(newWorkers int, pg *postgre.ApiAdapter, parentCnxt context.Conte
 	mu.Lock()
 	defer mu.Unlock()
 
-	old := config.Workers
+	if newWorkers < 1 || newWorkers > 10 {
+		slog.Error("worker count must be between 1 and 10")
+		return errors.New("worker count must be between 1 and 10")
+	}
+	workers := pg.GetWorkers()
+	old := workers
 
-	if newWorkers > config.Workers {
-		for w := config.Workers + 1; w <= newWorkers; w++ {
+	if newWorkers > workers {
+		for w := workers + 1; w <= newWorkers; w++ {
 			ctx, cancel := context.WithCancel(parentCnxt)
 			workerCancels[w] = cancel
 			go Workers(w, pg, ctx)
 		}
 	}
 
-	if newWorkers < config.Workers {
-		for w := config.Workers; w > newWorkers; w-- {
+	if newWorkers < workers {
+		for w := workers; w > newWorkers; w-- {
 			if cancel, ok := workerCancels[w]; ok {
 				cancel()
 				delete(workerCancels, w)
@@ -144,8 +168,7 @@ func SetWorkers(newWorkers int, pg *postgre.ApiAdapter, parentCnxt context.Conte
 		}
 	}
 
-	config.Workers = newWorkers
-	slog.Info("workers count ", config.Workers)
+	pg.SetWorkers(newWorkers)
 	slog.Info("Number of workers changed", "from", old, "to", newWorkers)
 	return nil
 }
