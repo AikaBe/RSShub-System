@@ -2,8 +2,9 @@ package postgre
 
 import (
 	"log/slog"
-	"rsshub/internal/domain/model"
 	"time"
+
+	"rsshub/internal/domain/model"
 )
 
 func (a *ApiAdapter) GetOldestFeeds() ([]model.Feed, error) {

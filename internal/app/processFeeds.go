@@ -5,14 +5,14 @@ import (
 	"encoding/xml"
 	"errors"
 	"io"
-	"log"
 	"log/slog"
 	"net/http"
+	"sync"
+	"time"
+
 	"rsshub/config"
 	"rsshub/internal/adapter/postgre"
 	"rsshub/internal/domain/model"
-	"sync"
-	"time"
 )
 
 type Service struct {
@@ -83,9 +83,13 @@ func (s *Service) Start(ctx context.Context) error {
 				return err
 			}
 
+			var feedIDs []int
 			for _, f := range feeds {
+				feedIDs = append(feedIDs, f.Id)
 				s.jobs <- config.Jobs{Id: f.Id, Name: f.Name, URL: f.Url}
 			}
+
+			slog.Info("Fetched feeds", "ids", feedIDs)
 		}
 	}
 }
@@ -142,26 +146,26 @@ func (s *Service) worker(id int, ctx context.Context) {
 		case job := <-s.jobs:
 			resp, err := http.Get(job.URL)
 			if err != nil {
-				log.Println("http get error:", err)
+				slog.Error("http get error:", err)
 				continue
 			}
 			data, err := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			if err != nil {
-				log.Println("read error:", err)
+				slog.Error("read error:", err)
 				continue
 			}
 
 			var rss model.RSSFeed
 			if err := xml.Unmarshal(data, &rss); err != nil {
-				log.Println("xml error:", err)
+				slog.Error("xml error:", err)
 				continue
 			}
 
 			for _, item := range rss.Channel.Item {
 				s.mu.Lock()
 				if err := s.db.AddArticle(item, job.Id); err != nil {
-					log.Println("db insert error:", err)
+					slog.Error("db insert error:", err)
 				}
 				s.mu.Unlock()
 			}

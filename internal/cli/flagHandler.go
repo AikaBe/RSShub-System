@@ -7,11 +7,12 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
+	"syscall"
+
 	"rsshub/internal/adapter/postgre"
 	"rsshub/internal/app"
 	"rsshub/internal/domain"
-	"strconv"
-	"syscall"
 )
 
 type Handler struct {

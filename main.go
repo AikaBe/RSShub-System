@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+
 	"rsshub/internal/adapter/postgre"
 	"rsshub/internal/app"
 	"rsshub/internal/cli"

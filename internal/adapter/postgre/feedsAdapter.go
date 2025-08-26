@@ -3,8 +3,9 @@ package postgre
 import (
 	"errors"
 	"log/slog"
-	"rsshub/internal/domain/model"
 	"time"
+
+	"rsshub/internal/domain/model"
 )
 
 func (a *ApiAdapter) AddFeed(name, url string) error {

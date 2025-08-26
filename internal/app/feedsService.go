@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"log/slog"
+
 	"rsshub/internal/adapter/postgre"
 	"rsshub/internal/domain/model"
 )
