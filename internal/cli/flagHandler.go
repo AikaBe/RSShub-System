@@ -34,7 +34,7 @@ func FlagHandler(pg *postgre.ApiAdapter) {
 		}
 	case "list":
 		listCmd := flag.NewFlagSet("list", flag.ExitOnError)
-		num := listCmd.Int("num", 5, "num of feeds")
+		num := listCmd.Int("num", 3, "num of feeds")
 		listCmd.Parse(os.Args[2:])
 		feeds, err := app.ListFeedsService(pg, *num)
 		if err != nil {

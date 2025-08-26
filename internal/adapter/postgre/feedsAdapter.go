@@ -30,7 +30,7 @@ func (pg *ApiAdapter) FeedExists(name, url string) (bool, error) {
 
 func (a *ApiAdapter) GetFeeds(limit int) ([]model.Feed, error) {
 	rows, err := a.db.Query(`
-	select id, name, url,created_at,updated_at 
+	select id, name, url
 	from feeds order by created_at DESC 
 	limit $1`, limit)
 	if err != nil {
