@@ -51,10 +51,7 @@ func (a *ApiAdapter) changeUpdate(id int) {
 }
 
 func (a *ApiAdapter) AddArticle(item model.RSSItem, feedID int) error {
-	var pubAt *time.Time
-	if t, err := time.Parse(time.RFC1123Z, item.PubDate); err == nil {
-		pubAt = &t
-	}
+	pubAt := parsePubDate(item.PubDate)
 
 	_, err := a.db.Exec(`
 		insert into articles (feed_id, title, link, published_at, description, created_at, updated_at)
@@ -62,29 +59,6 @@ func (a *ApiAdapter) AddArticle(item model.RSSItem, feedID int) error {
 	`, feedID, item.Title, item.Link, pubAt, item.Description)
 
 	return err
-}
-
-func (a *ApiAdapter) ReadArticle() ([]model.Article, error) {
-	rows, err := a.db.Query(`
-		select id, feed_id, title, link, published_at, description, created_at, updated_at 
-		from articles`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var articles []model.Article
-	for rows.Next() {
-		var art model.Article
-		if err := rows.Scan(
-			&art.ID, &art.FeedID, &art.Title, &art.Link,
-			&art.PublishedAt, &art.Description, &art.CreatedAt, &art.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		articles = append(articles, art)
-	}
-	return articles, rows.Err()
 }
 
 func (a *ApiAdapter) SetWorkers(workersCount int) {
@@ -134,4 +108,21 @@ func (a *ApiAdapter) TryLock() (bool, error) {
 func (a *ApiAdapter) Unlock() error {
 	_, err := a.db.Exec("SELECT pg_advisory_unlock(12345)")
 	return err
+}
+
+func parsePubDate(s string) *time.Time {
+	layouts := []string{
+		time.RFC1123Z,
+		time.RFC1123,
+		time.RFC822Z,
+		time.RFC822,
+		time.RFC3339,
+	}
+
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return &t
+		}
+	}
+	return nil
 }

@@ -73,3 +73,31 @@ func (a *ApiAdapter) DeleteFeedByName(name string) error {
 	slog.Info("Feed deleted from database", "name", name)
 	return nil
 }
+
+func (a *ApiAdapter) GetArticlesByFeedName(feedName string, limit int) ([]model.Article, error) {
+	rows, err := a.db.Query(`
+		SELECT a.id, a.feed_id, a.title, a.link, a.published_at, a.description, a.created_at, a.updated_at
+		FROM articles a
+		JOIN feeds f ON a.feed_id = f.id
+		WHERE f.name = $1
+		ORDER BY a.published_at DESC
+		LIMIT $2
+	`, feedName, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var articles []model.Article
+	for rows.Next() {
+		var art model.Article
+		if err := rows.Scan(
+			&art.ID, &art.FeedID, &art.Title, &art.Link,
+			&art.PublishedAt, &art.Description, &art.CreatedAt, &art.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		articles = append(articles, art)
+	}
+	return articles, rows.Err()
+}

@@ -15,87 +15,131 @@ import (
 	"time"
 )
 
-var (
-	jobs            = make(chan config.Jobs, 100)
+type Service struct {
+	db              *postgre.ApiAdapter
+	jobs            chan config.Jobs
 	mu              sync.Mutex
 	ticker          *time.Ticker
-	workerCancels   = make(map[int]context.CancelFunc)
+	workerCancels   map[int]context.CancelFunc
 	currentInterval time.Duration
-)
+}
 
-func Start(ctx context.Context, pg *postgre.ApiAdapter) error {
-	locked, err := pg.TryLock()
+func NewService(db *postgre.ApiAdapter) *Service {
+	return &Service{
+		db:            db,
+		jobs:          make(chan config.Jobs, 100),
+		workerCancels: make(map[int]context.CancelFunc),
+	}
+}
+
+func (s *Service) Start(ctx context.Context) error {
+	locked, err := s.db.TryLock()
 	if err != nil {
 		return err
 	}
 	if !locked {
-		return errors.New("Background process is already running")
+		return errors.New("background process is already running")
 	}
-	defer pg.Unlock()
+	defer s.db.Unlock()
 
-	interval, err := time.ParseDuration(pg.GetInterval())
+	interval, err := time.ParseDuration(s.db.GetInterval())
 	if err != nil {
 		return err
 	}
-	currentInterval = interval
-	ticker = time.NewTicker(interval)
+	s.currentInterval = interval
+	s.ticker = time.NewTicker(interval)
 
-	workers := pg.GetWorkers()
+	workers := s.db.GetWorkers()
 	for i := 1; i <= workers; i++ {
 		wctx, cancel := context.WithCancel(ctx)
-		workerCancels[i] = cancel
-		go Workers(i, pg, wctx)
+		s.workerCancels[i] = cancel
+		go s.worker(i, wctx)
 	}
-	slog.Info("The background process for fetching feeds has started ", "interval", interval, "workers", workers)
+	slog.Info("Background fetch started", "interval", interval, "workers", workers)
 
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("shutting down background fetcher...")
-			if ticker != nil {
-				ticker.Stop()
-			}
+			slog.Info("shutting down background fetcher")
+			s.ticker.Stop()
 			return nil
-		case t := <-ticker.C:
-			newIntervalStr := pg.GetInterval()
+		case t := <-s.ticker.C:
+			newIntervalStr := s.db.GetInterval()
 			newInterval, err := time.ParseDuration(newIntervalStr)
-			if err == nil && newInterval != currentInterval {
-				mu.Lock()
-				ticker.Stop()
-				ticker = time.NewTicker(newInterval)
-				old := currentInterval
-				currentInterval = newInterval
-				mu.Unlock()
+			if err == nil && newInterval != s.currentInterval {
+				s.mu.Lock()
+				s.ticker.Stop()
+				s.ticker = time.NewTicker(newInterval)
+				old := s.currentInterval
+				s.currentInterval = newInterval
+				s.mu.Unlock()
 				slog.Info("Interval changed via DB", "from", old, "to", newInterval)
 			}
 
 			slog.Info("tick", "time", t)
 
-			feeds, err := pg.GetOldestFeeds()
+			feeds, err := s.db.GetOldestFeeds()
 			if err != nil {
 				return err
 			}
 
 			for _, f := range feeds {
-				slog.Info("enqueue feed", "id", f.Id, "name", f.Name, "url", f.Url)
-				jobs <- config.Jobs{Id: f.Id, Name: f.Name, URL: f.Url}
+				s.jobs <- config.Jobs{Id: f.Id, Name: f.Name, URL: f.Url}
 			}
 		}
 	}
 }
 
-// workers
-func Workers(id int, pg *postgre.ApiAdapter, ctx context.Context) {
+func (s *Service) SetInterval(newInterval string) error {
+	if newInterval == "" {
+		newInterval = "3m"
+	}
+	_, err := time.ParseDuration(newInterval)
+	if err != nil {
+		return err
+	}
+
+	old := s.db.GetInterval()
+	s.db.SetInterval(newInterval)
+	slog.Info("Interval updated in DB", "from", old, "to", newInterval)
+	return nil
+}
+
+func (s *Service) SetWorkers(newWorkers int, parentCtx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if newWorkers < 1 || newWorkers > 10 {
+		return errors.New("worker count must be between 1 and 10")
+	}
+
+	old := s.db.GetWorkers()
+	if newWorkers > old {
+		for w := old + 1; w <= newWorkers; w++ {
+			ctx, cancel := context.WithCancel(parentCtx)
+			s.workerCancels[w] = cancel
+			go s.worker(w, ctx)
+		}
+	} else if newWorkers < old {
+		for w := old; w > newWorkers; w-- {
+			if cancel, ok := s.workerCancels[w]; ok {
+				cancel()
+				delete(s.workerCancels, w)
+			}
+		}
+	}
+
+	s.db.SetWorkers(newWorkers)
+	slog.Info("Worker count updated", "from", old, "to", newWorkers)
+	return nil
+}
+
+func (s *Service) worker(id int, ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case job, ok := <-jobs:
-			if !ok {
-				log.Printf("worker %d jobs channel closed\n", id)
-				return
-			}
-
+		case job := <-s.jobs:
 			resp, err := http.Get(job.URL)
 			if err != nil {
 				log.Println("http get error:", err)
@@ -115,60 +159,12 @@ func Workers(id int, pg *postgre.ApiAdapter, ctx context.Context) {
 			}
 
 			for _, item := range rss.Channel.Item {
-				mu.Lock()
-				if err := pg.AddArticle(item, job.Id); err != nil {
+				s.mu.Lock()
+				if err := s.db.AddArticle(item, job.Id); err != nil {
 					log.Println("db insert error:", err)
 				}
-				mu.Unlock()
+				s.mu.Unlock()
 			}
 		}
 	}
-}
-
-func SetInterval(newInterval string, pg *postgre.ApiAdapter) error {
-	if newInterval == "" {
-		newInterval = "3m"
-	}
-	_, err := time.ParseDuration(newInterval)
-	if err != nil {
-		return err
-	}
-
-	old := pg.GetInterval()
-	pg.SetInterval(newInterval)
-	slog.Info("Interval of fetching feeds saved to DB", "from", old, "to", newInterval)
-	return nil
-}
-
-func SetWorkers(newWorkers int, pg *postgre.ApiAdapter, parentCnxt context.Context) error {
-	mu.Lock()
-	defer mu.Unlock()
-
-	if newWorkers < 1 || newWorkers > 10 {
-		slog.Error("worker count must be between 1 and 10")
-		return errors.New("worker count must be between 1 and 10")
-	}
-	workers := pg.GetWorkers()
-	old := workers
-
-	if newWorkers > workers {
-		for w := workers + 1; w <= newWorkers; w++ {
-			ctx, cancel := context.WithCancel(parentCnxt)
-			workerCancels[w] = cancel
-			go Workers(w, pg, ctx)
-		}
-	}
-
-	if newWorkers < workers {
-		for w := workers; w > newWorkers; w-- {
-			if cancel, ok := workerCancels[w]; ok {
-				cancel()
-				delete(workerCancels, w)
-			}
-		}
-	}
-
-	pg.SetWorkers(newWorkers)
-	slog.Info("Number of workers changed", "from", old, "to", newWorkers)
-	return nil
 }

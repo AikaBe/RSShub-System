@@ -9,11 +9,20 @@ import (
 	"os/signal"
 	"rsshub/internal/adapter/postgre"
 	"rsshub/internal/app"
+	"rsshub/internal/domain"
 	"strconv"
 	"syscall"
 )
 
-func FlagHandler(pg *postgre.ApiAdapter) {
+type Handler struct {
+	manager domain.FeedManager
+}
+
+func NewHandler(manager domain.FeedManager) *Handler {
+	return &Handler{manager: manager}
+}
+
+func FlagHandler(pg *postgre.ApiAdapter, manager domain.FeedManager) {
 	if len(os.Args) < 2 {
 		slog.Error("expected subcommands ! ")
 		os.Exit(1)
@@ -67,27 +76,49 @@ func FlagHandler(pg *postgre.ApiAdapter) {
 	case "fetch":
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-
-		if err := app.Start(ctx, pg); err != nil {
-			slog.Error("Wrong background work! ", err)
+		if err := manager.Start(ctx); err != nil {
+			slog.Error("Failed to start fetcher", "err", err)
 		}
 
 	case "set-interval":
 		interval := os.Args[2]
-		err := app.SetInterval(interval, pg)
-		if err != nil {
-			slog.Error("Cannot change the interval", err)
+		if err := manager.SetInterval(interval); err != nil {
+			slog.Error("Cannot change interval", "err", err)
 		}
-
 	case "set-workers":
 		strWorkers := os.Args[2]
 		workers, err := strconv.Atoi(strWorkers)
 		if err != nil {
-			slog.Error("Invalid workers count", err)
+			slog.Error("Invalid workers count", "err", err)
+			return
 		}
-		err = app.SetWorkers(workers, pg, context.Background())
+		if err := manager.SetWorkers(workers, context.Background()); err != nil {
+			slog.Error("Cannot change workers", "err", err)
+		}
+	case "articles":
+		articlesCmd := flag.NewFlagSet("articles", flag.ExitOnError)
+		feedName := articlesCmd.String("feed-name", "", "name of the feed")
+		num := articlesCmd.Int("num", 3, "number of articles to show")
+		articlesCmd.Parse(os.Args[2:])
+
+		if *feedName == "" {
+			slog.Error("Feed name is required")
+			os.Exit(1)
+		}
+
+		articles, err := app.GetArticlesService(pg, *feedName, *num)
 		if err != nil {
-			slog.Error("Cannot change the workers", err)
+			slog.Error("failed to get articles", "err", err)
+			os.Exit(1)
+		}
+
+		fmt.Printf("Feed: %s\n\n", *feedName)
+		for i, a := range articles {
+			published := "unknown"
+			if a.PublishedAt != nil {
+				published = a.PublishedAt.Format("2006-01-02")
+			}
+			fmt.Printf("%d. [%s] %s\n   %s\n\n", i+1, published, a.Title, a.Link)
 		}
 
 	default:

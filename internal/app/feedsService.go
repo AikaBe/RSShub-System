@@ -48,3 +48,14 @@ func DeleteFeedService(pg *postgre.ApiAdapter, name string) error {
 	}
 	return nil
 }
+
+func GetArticlesService(pg *postgre.ApiAdapter, feedName string, limit int) ([]model.Article, error) {
+	if feedName == "" {
+		return nil, errors.New("feed name cannot be empty")
+	}
+	if limit <= 0 {
+		limit = 3
+	}
+
+	return pg.GetArticlesByFeedName(feedName, limit)
+}
