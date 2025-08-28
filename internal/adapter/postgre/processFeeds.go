@@ -62,6 +62,16 @@ func (a *ApiAdapter) AddArticle(item model.RSSItem, feedID int) error {
 	return err
 }
 
+func (pg *ApiAdapter) ArticleExists(title string) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM articles WHERE title = $1 )`
+	var exists bool
+	err := pg.db.QueryRow(query, title).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
 func (a *ApiAdapter) SetWorkers(workersCount int) {
 	_, err := a.db.Exec(`update settings set workers = $1 `, workersCount)
 	if err != nil {

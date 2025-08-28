@@ -132,7 +132,6 @@ func (s *Service) SetWorkers(newWorkers int, parentCtx context.Context) error {
 			}
 		}
 	}
-
 	s.db.SetWorkers(newWorkers)
 	slog.Info("Worker count updated", "from", old, "to", newWorkers)
 	return nil
@@ -164,11 +163,27 @@ func (s *Service) worker(id int, ctx context.Context) {
 
 			for _, item := range rss.Channel.Item {
 				s.mu.Lock()
+
+				exists, err := s.db.ArticleExists(item.Title)
+				if err != nil {
+					slog.Error("db exists check error:", err)
+					s.mu.Unlock()
+					continue
+				}
+
+				if exists {
+					slog.Info("article already exists, skipping", "title", item.Title)
+					s.mu.Unlock()
+					continue
+				}
+
 				if err := s.db.AddArticle(item, job.Id); err != nil {
 					slog.Error("db insert error:", err)
 				}
+
 				s.mu.Unlock()
 			}
+
 		}
 	}
 }
