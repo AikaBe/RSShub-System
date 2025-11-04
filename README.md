@@ -1,54 +1,46 @@
-RSSHub
+#RSSHub
 
-RSSHub is a CLI application for fetching, storing, and displaying articles from RSS feeds. It uses a background worker pool to periodically fetch RSS data and store it in PostgreSQL.
+RSSHub is a CLI application that aggregates RSS feeds, fetches articles periodically, and stores them in PostgreSQL. It allows users to manage feeds, view the latest articles, and adjust the fetch interval and worker count dynamically.
 
- Features
+##🚀 Live Demo
 
- CLI-based interface
-
- Add, list, and delete RSS feeds
-
- Periodically fetch articles using ticker and workers
-
- Dynamically change fetch interval and worker count
-
- Graceful shutdown of ticker and workers
-
- Postgres-based article storage
-
- Project Requirements
-
- Code must be formatted using gofumpt
-
- No third-party dependencies (except PostgreSQL driver)
-
- Must compile without errors using:
-
-go build -o rsshub .
-
-
- Must run without data races using:
-
-go run -race main.go
-
-
- Dynamic interval & worker resizing via CLI (without restart)
-
- Clear error messages and proper exit codes on failure
-
- Docker Setup
-
-The project includes docker-compose.yml to run:
-
-PostgreSQL
-
-RSSHub CLI application
+Since RSSHub is a CLI application, you can test it locally by running it with Docker Compose:
 
 docker-compose up --build
 
- Configuration
+##🛠️ Technologies Used
 
-Set in .env or directly in Docker Compose:
+Backend: Go (CLI Application)
+
+Database: PostgreSQL
+
+Deployment: Docker & Docker Compose
+
+##✨ Features
+
+CLI-based interface for managing RSS feeds
+
+Add, list, and delete RSS feeds
+
+Periodic article fetching with a configurable interval
+
+Worker pool for concurrent feed processing
+
+Dynamic interval and worker resizing without restarting
+
+Graceful shutdown of background processes
+
+Safe concurrency (no data races)
+
+##📦 Installation
+
+Clone the repository:
+
+git clone https://github.com/yourusername/rsshub.git
+cd rsshub
+
+
+Create a .env file with the following:
 
 # CLI App
 CLI_APP_TIMER_INTERVAL=3m
@@ -57,210 +49,86 @@ CLI_APP_WORKERS_COUNT=3
 # PostgreSQL
 POSTGRES_HOST=localhost
 POSTGRES_PORT=5432
-POSTGRES_USER=rssuser
-POSTGRES_PASSWORD=rsspass
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=changem
 POSTGRES_DBNAME=rsshub
 
- CLI Commands
-Start Background Fetcher
+
+##Run the project with Docker Compose:
+
+docker-compose up --build
+
+
+Alternatively, build locally:
+
+go build -o rsshub .
+
+##🎯 Usage
+
+Start background fetching:
+
 ./rsshub fetch
 
 
-Starts a ticker + worker pool. You will see:
+Add a new RSS feed:
 
-The background process for fetching feeds has started (interval = 3 minutes, workers = 3)
-
-
-Only one instance is allowed at a time.
-
-Set Interval (Live)
-./rsshub set-interval 2m
-
-
-Changes RSS fetch interval without restarting the app:
-
-Interval of fetching feeds changed from 3 minutes to 2 minutes
-
-Set Workers (Live)
-./rsshub set-workers 5
-
-
-Resizes the background worker pool dynamically:
-
-Number of workers changed from 3 to 5
-
-Add RSS Feed
 ./rsshub add --name "tech-crunch" --url "https://techcrunch.com/feed/"
 
-List Feeds
+
+List feeds:
+
 ./rsshub list --num 5
 
 
-Shows the 5 most recently added feeds.
+Set fetch interval dynamically:
 
-Delete Feed
-./rsshub delete --name "tech-crunch"
-
-Show Articles
-./rsshub articles --feed-name "tech-crunch" --num 5
-
-Help
-./rsshub --help
-
- RSS Structure Example
-<rss>
-  <channel>
-    <title>RSS Feed</title>
-    <link>https://example.com</link>
-    <item>
-      <title>Post 1</title>
-      <link>https://example.com/1</link>
-      <pubDate>Mon, 06 Sep 2021 12:00:00 GMT</pubDate>
-      <description>Summary of post 1</description>
-    </item>
-  </channel>
-</rss>
+./rsshub set-interval 2m
 
 
-Parsed into:
+Resize workers dynamically:
 
-type RSSFeed struct {
-	Channel struct {
-		Title string    `xml:"title"`
-		Link  string    `xml:"link"`
-		Item  []RSSItem `xml:"item"`
-	} `xml:"channel"`
-}
-
-type RSSItem struct {
-	Title       string `xml:"title"`
-	Link        string `xml:"link"`
-	Description string `xml:"description"`
-	PubDate     string `xml:"pubDate"`
-}
-
-type Feed struct {
-	Id   int
-	Name string
-	Url  string
-}
-
-type Article struct {
-
-	ID          int
-	FeedID      int
-	Title       string
-	Link        string
-	Description string
-	PublishedAt *time.Time
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	
-}
-
- Background Aggregator
-
-Default interval: 3m
-
-Default workers: 3
-
-Fetches N oldest feeds from DB every tick
-
-Sends jobs to workers via a buffered channel
-
-Workers fetch and parse RSS, then store articles in Postgres
-
-Interval and worker count can change while running
-
- Safety Rules
-Problem	Solution
- Data Race	Use sync.Mutex or atomic
- Goroutine Leaks	Use context.Context for cancellation
- Duplicate Tickers	Always Stop() old ticker before creating a new one
- Closing Channel Twice	Only one goroutine closes the channel
- ticker.Reset() Panic	Don’t call Reset() on a stopped ticker
- Deadlock on jobs	Make sure workers are always reading from jobs channel
-
- Migrations
-
-Directory: migrations/
-
--- для самих каналов
-create table feeds (
-    id serial primary key,
-    name text not null unique,
-    url text not null unique,
-    created_at timestamp not null ,
-    updated_at timestamp not null
-);
-
--- для самих статей
-create table articles (
-    id serial primary key,
-    feed_id int references feeds(id) on delete cascade,
-    title text not null,
-    link text not null,
-    published_at timestamp,
-    description text not null ,
-    created_at timestamp,
-    updated_at timestamp
-);
-
-create table settings (
-                          id serial primary key,
-                          interval text not null default '3m',
-                          workers int not null default 3
-);
-insert into settings (interval, workers) values ('3m', 3);
-
- Example Workflow
-
-Terminal 1:
-
-./rsshub fetch
-# → Background process for fetching feeds has started
-
-
-Terminal 2:
-
-./rsshub set-interval 1m
 ./rsshub set-workers 5
 
 
-To stop:
+View latest articles:
 
-Press Ctrl+C
+./rsshub articles --feed-name "tech-crunch" --num 5
 
-OR send a signal (e.g., kill)
+##🏗️ Architecture
 
-Logs:
+Aggregator Interface: Handles start, stop, interval changes, and worker resizing.
 
-Graceful shutdown: aggregator stopped
+Worker Pool: Fetches and parses RSS feeds concurrently.
 
- Warnings
+Ticker: Runs periodic feed aggregation.
 
-Do not spam RSS feed servers
+PostgreSQL Storage: Stores feeds metadata and articles.
 
-Print logs per request
+CLI Commands: Provides interface to control feeds, workers, and intervals.
 
-Be ready to interrupt (Ctrl+C) if too many requests occur
+##📸 Screenshots
 
-Interface Overview
-type Aggregator interface {
-  Start(ctx context.Context) error
-  Stop() error
-  SetInterval(d time.Duration)
-  Resize(workers int) error
-}
+Since this is a CLI application, output examples in terminal:
 
- Summary
+###Start Fetching
 
-This project meets all constraints:
+$ ./rsshub fetch
+The background process for fetching feeds has started (interval = 3 minutes, workers = 3)
 
- Safe concurrency
 
- Dynamic control over workers & interval
+List Feeds
 
- Works with PostgreSQL
+$ ./rsshub list --num 3
+1. Name: tech-crunch | URL: https://techcrunch.com/feed/ | Added: 2025-06-10 15:34
+2. Name: hacker-news | URL: https://news.ycombinator.com/rss | Added: 2025-06-10 15:37
+3. Name: bbc-world | URL: http://feeds.bbci.co.uk/news/world/rss.xml | Added: 2025-06-11 09:15
 
-🧼Clean and idiomatic Go code
+##🔮 Future Improvements
+
+Web interface for easier feed management
+
+RSS feed categorization and search
+
+Notifications for new articles
+
+Multi-user support with role-based access

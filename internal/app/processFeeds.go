@@ -98,6 +98,9 @@ func (s *Service) SetInterval(newInterval string) error {
 	if newInterval == "" {
 		newInterval = "3m"
 	}
+	if newInterval <= "15s" || newInterval >= "15m" {
+		return errors.New("interval must be between 15s - 15m")
+	}
 	_, err := time.ParseDuration(newInterval)
 	if err != nil {
 		return err
