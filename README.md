@@ -1,14 +1,14 @@
-#RSSHub
+# RSSHub
 
 RSSHub is a CLI application that aggregates RSS feeds, fetches articles periodically, and stores them in PostgreSQL. It allows users to manage feeds, view the latest articles, and adjust the fetch interval and worker count dynamically.
 
-##🚀 Live Demo
+## 🚀 Live Demo
 
 Since RSSHub is a CLI application, you can test it locally by running it with Docker Compose:
 
 docker-compose up --build
 
-##🛠️ Technologies Used
+## 🛠️ Technologies Used
 
 Backend: Go (CLI Application)
 
@@ -16,7 +16,7 @@ Database: PostgreSQL
 
 Deployment: Docker & Docker Compose
 
-##✨ Features
+## ✨ Features
 
 CLI-based interface for managing RSS feeds
 
@@ -32,7 +32,7 @@ Graceful shutdown of background processes
 
 Safe concurrency (no data races)
 
-##📦 Installation
+## 📦 Installation
 
 Clone the repository:
 
@@ -54,7 +54,7 @@ POSTGRES_PASSWORD=changem
 POSTGRES_DBNAME=rsshub
 
 
-##Run the project with Docker Compose:
+## Run the project with Docker Compose:
 
 docker-compose up --build
 
@@ -63,7 +63,7 @@ Alternatively, build locally:
 
 go build -o rsshub .
 
-##🎯 Usage
+## 🎯 Usage
 
 Start background fetching:
 
@@ -94,7 +94,7 @@ View latest articles:
 
 ./rsshub articles --feed-name "tech-crunch" --num 5
 
-##🏗️ Architecture
+## 🏗️ Architecture
 
 Aggregator Interface: Handles start, stop, interval changes, and worker resizing.
 
@@ -106,11 +106,11 @@ PostgreSQL Storage: Stores feeds metadata and articles.
 
 CLI Commands: Provides interface to control feeds, workers, and intervals.
 
-##📸 Screenshots
+## 📸 Screenshots
 
 Since this is a CLI application, output examples in terminal:
 
-###Start Fetching
+### Start Fetching
 
 $ ./rsshub fetch
 The background process for fetching feeds has started (interval = 3 minutes, workers = 3)
@@ -123,7 +123,7 @@ $ ./rsshub list --num 3
 2. Name: hacker-news | URL: https://news.ycombinator.com/rss | Added: 2025-06-10 15:37
 3. Name: bbc-world | URL: http://feeds.bbci.co.uk/news/world/rss.xml | Added: 2025-06-11 09:15
 
-##🔮 Future Improvements
+## 🔮 Future Improvements
 
 Web interface for easier feed management
 
